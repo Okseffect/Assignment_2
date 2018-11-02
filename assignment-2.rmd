@@ -1,0 +1,323 @@
+---
+title: "assignment_2"
+author: Oksana Rebrik
+date: "02 11 2018"
+output: html_document
+---
+
+```{r as you asked}
+`%>%` <- magrittr::`%>%`
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = F)
+library(ggplot2)
+library(dplyr)
+```
+
+#Statistics M2 Assignment_2
+##Exercise 1: more permutation tests
+
+
+```{r load df}
+iris_subset_1 <- iris[c(89:94, 108:112),]
+iris_subset_1$Mean <- rowMeans(iris_subset_1[1:4])
+                               
+iris_subset_2 <- iris[88:114,]
+iris_subset_2$Mean <- rowMeans(iris_subset_2[1:4])
+```
+
+```{r mean and observed}
+All_means1 <- iris_subset_1 %>% group_by(Species) %>% dplyr::summarize(observed = mean(Mean))
+diff.observed1 <- All_means1$observed[1] - All_means1$observed[2]
+
+All_means2 <- iris_subset_2 %>% group_by(Species) %>% dplyr::summarize(observed = mean(Mean))
+diff.observed2 <- All_means2$observed[1] - All_means2$observed[2]
+```
+
+
+```{r perm}
+set.seed(1)
+number_of_permutations = 9999
+ diff.random1  <- rep(NA_real_, number_of_permutations) 
+ diff.random2  <- rep(NA_real_, number_of_permutations) 
+ 
+  for (i in 1 : number_of_permutations) {
+    
+    n = length(iris_subset_1$Mean)
+    shuffled = sample(iris_subset_1$Mean, n)
+    versicolor.random = shuffled[iris_subset_1$Species == "versicolor"] 
+    virginica.random = shuffled[iris_subset_1$Species == "virginica"] 
+    diff.random1[i] = mean(versicolor.random) - mean(virginica.random)
+  }
+ 
+ 
+  for (i in 1 : number_of_permutations) {
+    
+    n = length(iris_subset_2$Mean)
+    shuffled = sample(iris_subset_2$Mean, n)
+    versicolor.random = shuffled[iris_subset_2$Species == "versicolor"] 
+    virginica.random = shuffled[iris_subset_2$Species == "virginica"] 
+    diff.random2[i] = mean(versicolor.random) - mean(virginica.random)
+  }
+```
+
+```{r ggplot}
+df1 <- data.frame(diff.random1 = diff.random1, diff.random2 = diff.random2) # преобразовываем к data.frame, чтобы можно было использовать в ggplot
+g <-
+  ggplot(df1) +
+  geom_histogram(aes(diff.random2), fill="Red", alpha = 0.7) +
+  geom_histogram(aes(diff.random1), fill="steelblue", alpha = 0.8) +
+  geom_vline(xintercept=diff.observed1, color="steelblue")+ 
+  geom_vline(xintercept=diff.observed2, color="red", alpha = 0.8)
+g
+```
+The blue distribution is more platykurtic because there are more observations and random mixing makes it look like as normal one. 
+The red graph is the opposite it has fewer data and looks more leptokurtic. 
+Observed test statistics situated near each other, because of the same nature, however, it is calculated from different flowers. Different flowers have different means. 
+
+
+```{r p-value}
+pvalue1 = sum(abs(diff.random1) >= abs(diff.observed1))  / number_of_permutations
+pvalue2 = sum(abs(diff.random2) >= abs(diff.observed2))  / number_of_permutations
+```
+
+The p-value for the first sample <.005 because of that we able to reject the null hypothesis.
+```{r}
+pvalue1
+```
+p-value for the second sample <.001 because of that we able to reject the null hypothesis.
+```{r}
+pvalue2
+```
+The difference in p-values for the two samples is small because of an outlier in the first sample that crossed the line of observed difference.
+
+##Exercise 2: dplyr
+
+```{r}
+devtools::install_github("ewan/stats_course", subdir="data/stress_shift")
+```
+###Task A.
+```{r stress}
+stress <-  stressshift::stress_shift_unamb
+stress_shift_3dict <- dplyr::filter(stress , Dict %in% c("W1802", "J1917", "C1687"))
+
+print(nrow(stress_shift_3dict) )
+```
+###Task B.
+```{r pipe}
+stress_shift_3dict_using_pipe <-  stress %>% dplyr::filter(Dict %in% c("W1802", "J1917", "C1687"))
+
+identical(stress_shift_3dict, stress_shift_3dict_using_pipe) 
+```
+###Task C.
+```{r noun}
+stress_shift_3dict_nouns <- stress_shift_3dict %>% dplyr::filter(Category == "Noun")
+stress_shift_3dict_verbs <- stress_shift_3dict %>% dplyr::filter(Category == "Verb")
+stress_shift_3dict_using_bind <- dplyr::bind_rows(stress_shift_3dict_nouns, stress_shift_3dict_verbs)
+
+stress_shift_3dict_using_bind_reversed <- dplyr::bind_rows(stress_shift_3dict_verbs, stress_shift_3dict_nouns)
+
+identical(stress_shift_3dict_using_bind, stress_shift_3dict)
+identical(stress_shift_3dict_using_bind_reversed, stress_shift_3dict)
+```
+As we can see, in the main dataset, the words are filtered so that first the nouns appear, and then the verbs. Therefore, if you first put the nouns, then the datasets will match. Probably the order, in this case, is not important, since the following aggregation mixes everything up.
+
+###Task D.
+```{r}
+stress_shift_nouns_renamed <- stress %>% dplyr::filter(Category == "Noun") %>% dplyr::select(Word, Dict, Syllable) %>% dplyr::rename(Syllable_Noun = Syllable)
+
+stress_shift_verbs_renamed <- stress %>% dplyr::filter(Category == "Verb") %>% dplyr::select(Word, Dict, Syllable) %>% dplyr::rename(Syllable_Verb = Syllable)
+
+stress_shift_wide <- dplyr::inner_join(stress_shift_nouns_renamed, stress_shift_verbs_renamed)
+```
+Inner_join left only those words that are used as verbs as well as nouns.
+
+###Task E.
+```{r}
+ggplot(stress)+
+  geom_bar(aes(x = Category, fill = Syllable))
+```
+
+###Task F.
+```{r}
+stress_shift_byword <- stress_shift_wide %>% dplyr::group_by(Word) %>% dplyr::summarise(Noun_Percent_Syll_1 =(sum((Syllable_Noun == "Syllable 1"), na.rm = TRUE)/ length(Syllable_Noun)),                           Verb_Percent_Syll_1 =( sum((Syllable_Verb == "Syllable 1"), na.rm = TRUE)/ length(Syllable_Verb)))
+
+print(nrow(stress_shift_byword))
+```
+
+###Task G.
+```{r}
+ggplot(stress_shift_byword)+ 
+  geom_point(aes(x = Noun_Percent_Syll_1, y =Verb_Percent_Syll_1))
+```
+###Task F.
+```{r}
+stress_shift_byword_all <- stressshift::stress_shift_unamb %>% dplyr::group_by(Word) %>% dplyr::summarise(Noun_Percent_Syll_1 =(sum((Syllable == "Syllable 1" & Category == "Noun"), na.rm = TRUE)/ sum((Category == "Noun"), na.rm = TRUE)),                           Verb_Percent_Syll_1 =( sum((Syllable == "Syllable 1" & Category == "Verb"), na.rm = TRUE)/ sum((Category == "Verb"), na.rm = TRUE)))
+```
+
+##Exercise 3: t-tests
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 3, sd = 2), group = "A")
+dfB <- data_frame(value = rnorm(n = 50, mean = 4, sd = 2), group = "B")
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+v50 <-  t.test(df$value[1:50] ,df$value[51:100])
+v50
+#v50$statistic
+#ts50 <-  replicate(1000,t.test(df$value[1:50] ,df$value[51:100])$statistic)
+```
+With a large number of observations, the groups are statistically different and the average for the two groups corresponds to base.
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 5, mean = 3, sd = 2), group = "A")
+dfB <- data_frame(value = rnorm(n = 5, mean = 4, sd = 2), group = "B")
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+v5 <-  t.test(df$value[1:5] ,df$value[6:10])
+v5
+v5$statistic
+
+#ts5 <- replicate(1000, t.test(rnorm(n = 5, mean = 3, sd = 2) ,rnorm(n = 5, mean = 4, sd = 2))$statistic)
+#lines(density(ts5))
+
+#range(ts5)
+
+#pts = seq(-5.1,3.8,length=100)
+#plot(pts,dt(pts,df=18),col='red',type='l')+
+#lines(density(ts5))
+```
+When there are few observations, we cannot statistically distinguish between groups.
+
+##Exercise 4: statistical power
+
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 3, sd = 2), group = "A")
+sda <-  sd(dfA$value, na.rm = FALSE)
+dfB <- data_frame(value = rnorm(n = 5, mean = 3, sd = 2), group = "B")
+sdb <-  sd(dfB$value, na.rm = FALSE)
+df <-  rbind(dfA, dfB)
+
+rm(.Random.seed, envir=globalenv())
+
+t1 <- t.test(df$value[1:50] ,df$value[51:56])
+sd1 <-  sqrt((sda^2 + sdb^2)/2)
+```
+
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 3, sd = 2), group = "A")
+sda <-  sd(dfA$value, na.rm = FALSE)
+dfB <- data_frame(value = rnorm(n = 50, mean = 3, sd = 6), group = "B")
+sdb <-  sd(dfB$value, na.rm = FALSE)
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+t2 <- t.test(df$value[1:50] ,df$value[51:100])
+sd2 <-  sqrt((sda^2 + sdb^2)/2)
+```
+
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 1, sd = 2), group = "A")
+sda <-  sd(dfA$value, na.rm = FALSE)
+dfB <- data_frame(value = rnorm(n = 50, mean = 2, sd = 2), group = "B")
+sdb <-  sd(dfB$value, na.rm = FALSE)
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+t3 <- t.test(df$value[1:50] ,df$value[51:100])
+sd3 <-  sqrt((sda^2 + sdb^2)/2)
+```
+
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 3, sd = 2), group = "A")
+sda <-  sd(dfA$value, na.rm = FALSE)
+dfB <- data_frame(value = rnorm(n = 5, mean = 3, sd = 6), group = "B")
+sdb <-  sd(dfB$value, na.rm = FALSE)
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+t4 <- t.test(df$value[1:50] ,df$value[51:56])
+sd4 <-  sqrt((sda^2 + sdb^2)/2)
+```
+
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 1, sd = 2), group = "A")
+sda <-  sd(dfA$value, na.rm = FALSE)
+dfB <- data_frame(value = rnorm(n = 5, mean = 2, sd = 2), group = "B")
+sdb <-  sd(dfB$value, na.rm = FALSE)
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+t5 <- t.test(df$value[1:50] ,df$value[51:56])
+sd5 <-  sqrt((sda^2 + sdb^2)/2)
+```
+
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 3, sd = 2), group = "A")
+sda <-  sd(dfA$value, na.rm = FALSE)
+dfB <- data_frame(value = rnorm(n = 5, mean = 3, sd = 6), group = "B")
+sdb <-  sd(dfB$value, na.rm = FALSE)
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+t6 <- t.test(df$value[1:50] ,df$value[51:56])
+sd6 <-  sqrt((sda^2 + sdb^2)/2)
+```
+
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 1, sd = 2), group = "A")
+sda <-  sd(dfA$value, na.rm = FALSE)
+dfB <- data_frame(value = rnorm(n = 50, mean = 2, sd = 6), group = "B")
+sdb <-  sd(dfB$value, na.rm = FALSE)
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+t7 <- t.test(df$value[1:50] ,df$value[51:100])
+sd7 <-  sqrt((sda^2 + sdb^2)/2)
+```
+
+```{r}
+set.seed(12)
+dfA <- data_frame(value = rnorm(n = 50, mean = 1, sd = 2), group = "A")
+sda <-  sd(dfA$value, na.rm = FALSE)
+dfB <- data_frame(value = rnorm(n = 5, mean = 2, sd = 2), group = "B")
+sdb <-  sd(dfB$value, na.rm = FALSE)
+df <-  rbind(dfA, dfB)
+rm(.Random.seed, envir=globalenv())
+
+t8 <- t.test(df$value[1:50] ,df$value[51:56])
+sd8 <-  sqrt((sda^2 + sdb^2)/2)
+```
+
+
+```{r}
+library(pwr)
+pwrt<-pwr.t.test(d=c(sd1, sd2, sd3, sd4, sd5, sd6, sd7, sd8) ,n=28
+                 ,sig.level=.05,type="two.sample",alternative="two.sided")
+
+ggplot()+
+  geom_point(aes(x = pwrt$d, y =pwrt$power))
+```
+As we see in the graph, changes in the mean and standard deviations do not greatly affect the power of the test.
+
+
+```{r}
+library(pwr)
+pwrt<-pwr.t.test(d=1 ,n=c(28,50)
+                 ,sig.level=.05,type="two.sample",alternative="two.sided")
+
+ggplot()+
+  geom_point(aes(x = pwrt$n, y =pwrt$power))
+```
+While the change in sample size has a greater effect on statistical power.
